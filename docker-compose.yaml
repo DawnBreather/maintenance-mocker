@@ -1,0 +1,79 @@
+version: "3.9"
+
+services:
+  dozzle:
+    container_name: logs
+    image: amir20/dozzle
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - 8888:8080
+
+  maintenance:
+    container_name: maintenance
+    image: maintenance
+    build:
+      context: .
+      dockerfile: nginx.dockerfile
+    labels:
+      # Explicitly tell Traefik to expose this container
+      - "traefik.enable=true"
+      # The domain the service will respond to
+      # - "traefik.http.routers.rest_api.rule=Host(`${BASE_FQDN}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.maintenance.rule=Host(`pilot.cohero-health.com`)"
+      # Allow request only from the predefined entry point named "web"
+      - "traefik.http.routers.maintenance.entrypoints=websecure"
+      - "traefik.http.routers.maintenance.tls.certresolver=le-production"
+      # - "traefik.http.middlewares.serviceheaders.headers.accesscontrolalloworiginlist=*"
+      # - "traefik.http.middlewares.serviceheaders.headers.accessControlAllowCredentials=true"
+      # - "traefik.http.routers.rest_api.middlewares=serviceheaders"
+#      - "traefik.http.middlewares.serviceheaders.headers.accesscontrolalloworiginlist=*"
+
+
+  traefik:
+    container_name: traefik
+    image: traefik
+    command:
+      # Enabling docker provider
+      - "--providers.docker=true"
+      # Do not expose containers unless explicitly told so
+      - "--providers.docker.exposedbydefault=false"
+      - --global.checknewversion
+      # - --entrypoints.metrics.address=:9100/tcp
+      - --entrypoints.traefik.address=:9000/tcp
+      - --entrypoints.web.address=:80/tcp
+      - --entrypoints.websecure.address=:443/tcp
+      - --api.dashboard=true
+      - --ping=true
+      # - --metrics.prometheus=true
+      # - --metrics.prometheus.entrypoint=metrics
+      #- --entrypoints.web.http.redirections.entryPoint.to=:443
+      #- --entrypoints.web.http.redirections.entryPoint.scheme=https
+      - --api
+      - --api.insecure=true
+      - --certificatesresolvers.le-staging.acme.email=devops@abcloudz.com
+      - --certificatesresolvers.le-staging.acme.storage=/data/acme.staging.json
+      - --certificatesresolvers.le-staging.acme.tlschallenge=true
+      - --certificatesresolvers.le-staging.acme.caServer=https://acme-staging-v02.api.letsencrypt.org/directory
+      # - --certificatesresolvers.le-staging.acme.dnschallenge=true
+      # - --certificatesresolvers.le-staging.acme.dnschallenge.provider=cloudflare
+      - --certificatesresolvers.le-production.acme.email=devops@abcloudz.com
+      - --certificatesresolvers.le-production.acme.storage=/data/acme.production.json
+      - --certificatesresolvers.le-production.acme.tlschallenge=true
+      - --certificatesresolvers.le-production.acme.caServer=https://acme-v02.api.letsencrypt.org/directory
+      # - --certificatesresolvers.le-production.acme.dnschallenge=true
+      # - --certificatesresolvers.le-production.acme.dnschallenge.provider=cloudflare
+    # env:
+    # - name: CLOUDFLARE_DNS_API_TOKEN
+    #   value:
+    ports:
+      - 80:80
+      - 8080:80
+      - 443:443
+      - 9000:9000
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - traefik-data:/data
+
+volumes:
+  traefik-data:
